@@ -54,6 +54,7 @@
       <button v-if="!submitted" class="submit-btn" @click="onSubmit">提交</button>
       <template v-else>
         <button class="retry-btn" @click="onRetry">重来</button>
+        <button v-if="allCorrect" class="next-level-btn" @click="onNext">下一关 →</button>
       </template>
     </div>
 
@@ -67,11 +68,6 @@
     <!-- 撒花动画 -->
     <div v-if="showConfetti" class="confetti-container">
       <div v-for="n in 30" :key="n" class="confetti" :style="confettiStyle()"></div>
-    </div>
-
-    <!-- 下一关按钮 -->
-    <div v-if="submitted && allCorrect" class="next-level-section">
-      <button class="next-level-btn" @click="onNext">下一关 →</button>
     </div>
     
     <!-- 触摸拖动的视觉反馈元素 -->
@@ -427,9 +423,10 @@ export default {
   gap: 12px;
   justify-content: center;
   align-items: center;
+  flex-wrap: wrap;
 }
 
-.submit-btn, .retry-btn, .next-btn {
+.submit-btn, .retry-btn {
   padding: 10px 18px;
   border: none;
   color: #fff;
@@ -457,16 +454,6 @@ export default {
   background: #d35400;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(230, 126, 34, 0.3);
-}
-
-.next-btn {
-  background: #3498db;
-}
-
-.next-btn:hover {
-  background: #2980b9;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
 }
 
 /* Great Job! 提示 */
@@ -527,23 +514,20 @@ export default {
 }
 
 /* 下一关按钮 */
-.next-level-section {
-  margin-top: 20px;
-}
 .next-level-btn {
-  padding: 14px 32px;
+  padding: 10px 24px;
   border: none;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
-  border-radius: 12px;
-  font-size: 20px;
+  border-radius: 8px;
+  font-size: 16px;
   font-weight: bold;
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
 .next-level-btn:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
 }
 .bounce-all .animal-slot, .bounce-all .word-card {

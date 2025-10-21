@@ -9,24 +9,100 @@
           :class="['pick', { selected: selected === a.key }]"
           @click="selectAnimal(a.key)"
         >{{ a.emoji }}</button>
+        <!-- 气泡框选项 -->
+        <button
+          :class="['pick', 'bubble-option', { selected: selected === 'bubble' }]"
+          @click="selectAnimal('bubble')"
+        >
+          <div class="bubble-animation">💭</div>
+        </button>
       </div>
-      <div class="prompt">
-        <div v-for="(line, i) in currentPromptLines" :key="i" class="prompt-line">
-          {{ line }}
+      
+      <div class="center-view">
+        <transition name="emoji-change" mode="out-in">
+          <div :key="displayEmoji" class="chosen">{{ displayEmoji }}</div>
+        </transition>
+      </div>
+      
+      <div class="prompt-section">
+        <div class="input-line">
+          <span class="label">My favorite animal is </span>
+          <input 
+            v-model="animalInput"
+            type="text"
+            class="animal-input"
+            placeholder="__________"
+            @blur="validateAnimalInput($event)"
+            @focus="clearError($event)"
+          />
+          <span class="label">.</span>
+        </div>
+        <div class="input-line">
+          <span class="label">It's </span>
+          <div 
+            class="blank-input"
+            @drop.prevent="onDrop($event, 0)"
+            @dragover.prevent
+            @click="clearBlank(0)"
+          >
+            <span v-if="blanks[0]" class="filled-word">{{ blanks[0] }}</span>
+            <input 
+              v-else
+              v-model="blanks[0]"
+              type="text"
+              placeholder="__________"
+            />
+          </div>
+          <span class="label"> / It has </span>
+          <div 
+            class="blank-input"
+            @drop.prevent="onDrop($event, 1)"
+            @dragover.prevent
+            @click="clearBlank(1)"
+          >
+            <span v-if="blanks[1]" class="filled-word">{{ blanks[1] }}</span>
+            <input 
+              v-else
+              v-model="blanks[1]"
+              type="text"
+              placeholder="__________"
+            />
+          </div>
+          <span class="label"> / It likes </span>
+          <div 
+            class="blank-input"
+            @drop.prevent="onDrop($event, 2)"
+            @dragover.prevent
+            @click="clearBlank(2)"
+          >
+            <span v-if="blanks[2]" class="filled-word">{{ blanks[2] }}</span>
+            <input 
+              v-else
+              v-model="blanks[2]"
+              type="text"
+              placeholder="__________"
+            />
+          </div>
+          <span class="label">.</span>
         </div>
       </div>
-      <div class="center-view">
-        <div class="chosen-wrapper">
-          <div class="chosen">{{ currentEmoji }}</div>
-          <transition name="thinking-fade">
-            <div v-if="recording" class="thinking-bubble">
-              💭
-            </div>
-          </transition>
+      
+      <!-- 单词区域 -->
+      <div class="words-section">
+        <div class="word-bank">
+          <div 
+            v-for="word in wordBank" 
+            :key="word" 
+            class="word-chip"
+            draggable="true"
+            @dragstart="onDragStart($event, word)"
+          >
+            {{ word }}
+          </div>
         </div>
       </div>
       <div class="controls">
-        <button class="example-btn" @click="playExample" :disabled="playing">
+        <button class="example-btn" @click="playExample" :disabled="playing || selected === 'bubble'">
           <span v-if="!playing">🔊 播放示例</span>
           <span v-else>🔊 播放中...</span>
         </button>
@@ -121,56 +197,64 @@ export default {
           key: 'tiger', 
           emoji: '🐯',
           sentence: 'My favorite animal is tiger. It is strong.',
-          blank: 'My favorite animal is ____. It is ____.',
+          blank1: 'My favorite animal is __________.',
+          blank2: "It's __________ / It has __________ / It likes __________.",
           audioUrl: 'https://funzoor2.heself.com/resources/tiger.mp3'
         },
         { 
           key: 'monkey', 
           emoji: '🐒',
           sentence: 'My favorite animal is monkey. It is very clever.',
-          blank: 'My favorite animal is ____. It is very ____.',
+          blank1: 'My favorite animal is __________.',
+          blank2: "It's __________ / It has __________ / It likes __________.",
           audioUrl: 'https://funzoor2.heself.com/resources/monkey.mp3'
         },
         { 
           key: 'fish', 
           emoji: '🐟',
           sentence: 'My favorite animal is fish. It can swim.',
-          blank: 'My favorite animal is ____. It can ____.',
+          blank1: 'My favorite animal is __________.',
+          blank2: "It's __________ / It has __________ / It likes __________.",
           audioUrl: 'https://funzoor2.heself.com/resources/fish.mp3'
         },
         { 
           key: 'lion', 
           emoji: '🦁',
           sentence: 'My favorite animal is lion. It is brave.',
-          blank: 'My favorite animal is ____. It is ____.',
+          blank1: 'My favorite animal is __________.',
+          blank2: "It's __________ / It has __________ / It likes __________.",
           audioUrl: 'https://funzoor2.heself.com/resources/lion.mp3'
         },
         { 
           key: 'bird', 
           emoji: '🐦',
           sentence: 'My favorite animal is bird. It can fly.',
-          blank: 'My favorite animal is ____. It can ____.',
+          blank1: 'My favorite animal is __________.',
+          blank2: "It's __________ / It has __________ / It likes __________.",
           audioUrl: 'https://funzoor2.heself.com/resources/bird.mp3'
         },
         { 
           key: 'rabbit', 
           emoji: '🐰',
           sentence: 'My favorite animal is rabbit. It is cute.',
-          blank: 'My favorite animal is ____. It is ____.',
+          blank1: 'My favorite animal is __________.',
+          blank2: "It's __________ / It has __________ / It likes __________.",
           audioUrl: 'https://funzoor2.heself.com/resources/rabbit.mp3'
         },
         { 
           key: 'deer', 
           emoji: '🦌',
           sentence: 'My favorite animal is deer. It is beautiful.',
-          blank: 'My favorite animal is ____. It is ____.',
+          blank1: 'My favorite animal is __________.',
+          blank2: "It's __________ / It has __________ / It likes __________.",
           audioUrl: 'https://funzoor2.heself.com/resources/deer.mp3'
         },
         { 
           key: 'panda', 
           emoji: '🐼',
           sentence: 'My favorite animal is panda. It likes bamboo.',
-          blank: 'My favorite animal is ____. It likes ____.',
+          blank1: 'My favorite animal is __________.',
+          blank2: "It's __________ / It has __________ / It likes __________.",
           audioUrl: 'https://funzoor2.heself.com/resources/panda.mp3'
         }
       ],
@@ -188,7 +272,25 @@ export default {
       recordedAudioBlob: null,
       isPlayingRecorded: false,
       hasPermission: null,
-      showPermissionGuide: false
+      showPermissionGuide: false,
+      wordBank: [
+        'big', 'small', 'cute', 'clever', 'strong',
+        'red', 'yellow', 'white', 'blue', 'black',
+        'eyes', 'ears', 'mouth', 'nose', 'hair', 'leg', 'head', 'long', 'short'
+      ],
+      animalInput: '',
+      blanks: ['', '', ''],
+      draggingWord: null,
+      animalEmojiMap: {
+        'tiger': '🐯',
+        'monkey': '🐒',
+        'fish': '🐟',
+        'lion': '🦁',
+        'bird': '🐦',
+        'rabbit': '🐰',
+        'deer': '🦌',
+        'panda': '🐼'
+      }
     }
   },
   computed: {
@@ -197,16 +299,33 @@ export default {
       return f ? f.emoji : '❓'
     },
     currentAudioUrl() {
+      // 气泡框没有音频
+      if (this.selected === 'bubble') return ''
       const f = this.animals.find(a => a.key === this.selected)
       return f ? f.audioUrl : ''
     },
-    currentPromptLines() {
+    currentPrompt1() {
       const f = this.animals.find(a => a.key === this.selected)
-      if (!f || !f.blank) return []
-      return f.blank.split('. ').map(line => line.trim()).filter(line => line)
+      return f ? f.blank1 : ''
+    },
+    currentPrompt2() {
+      const f = this.animals.find(a => a.key === this.selected)
+      return f ? f.blank2 : ''
     },
     recordingTimeText() {
       return `${this.recordingTime}s / ${this.maxRecordTime}s`
+    },
+    displayEmoji() {
+      // 如果选择的是气泡框
+      if (this.selected === 'bubble') {
+        // 检查用户输入的动物名是否正确
+        const inputLower = this.animalInput.toLowerCase().trim()
+        if (this.animalEmojiMap[inputLower]) {
+          return this.animalEmojiMap[inputLower]
+        }
+        return '💭'
+      }
+      return this.currentEmoji
     }
   },
   methods: {
@@ -220,6 +339,64 @@ export default {
           audio.currentTime = 0
         }
         this.playing = false
+      }
+    },
+    onDragStart(event, word) {
+      this.draggingWord = word
+      event.dataTransfer.effectAllowed = 'move'
+    },
+    onDrop(event, blankIndex) {
+      if (!this.draggingWord) return
+      // 将单词放到对应的空白处
+      this.blanks[blankIndex] = this.draggingWord
+      this.draggingWord = null
+    },
+    validateAnimalInput(event) {
+      // 如果是气泡框选项，不需要验证
+      if (this.selected === 'bubble') {
+        return
+      }
+      
+      // 如果输入为空，不验证
+      if (!this.animalInput.trim()) {
+        return
+      }
+      
+      const inputLower = this.animalInput.toLowerCase().trim()
+      const isValid = this.animals.some(a => a.key === inputLower)
+      
+      if (!isValid) {
+        // 输入错误 - 只影响输入框
+        const inputEl = event?.target
+        if (inputEl) {
+          inputEl.classList.add('error')
+        }
+        
+        // 震动反馈
+        if (navigator.vibrate) {
+          navigator.vibrate(200)
+        }
+        
+        // 2秒后清除错误状态
+        setTimeout(() => {
+          if (inputEl) {
+            inputEl.classList.remove('error')
+          }
+          this.animalInput = ''
+        }, 2000)
+      }
+    },
+    clearError(event) {
+      // 清除输入框的错误样式
+      const inputEl = event?.target
+      if (inputEl) {
+        inputEl.classList.remove('error')
+      }
+    },
+    clearBlank(index) {
+      // 点击已填充的单词可以清除
+      if (this.blanks[index]) {
+        this.blanks[index] = ''
       }
     },
     playExample() {
@@ -455,59 +632,210 @@ export default {
 
 <style scoped>
 .level-three { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.stage { position: relative; width: 100%; max-width: 720px; background: linear-gradient(180deg,#111 0%,#333 40%,#222 100%); color: #fff; border-radius: 16px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
-.animal-picker { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-.pick { width: 40px; height: 40px; border-radius: 8px; border: 1px solid #555; background: #222; color: #fff; cursor: pointer; }
-.pick.selected { outline: 2px solid #42b983; }
-.prompt { 
-  text-align: center; 
-  margin: 10px 0; 
-  color: #ffd; 
-  min-height: 50px;
+.stage { position: relative; width: 100%; max-width: 900px; background: linear-gradient(180deg,#111 0%,#333 40%,#222 100%); color: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
+.animal-picker { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
+.pick { width: 60px; height: 60px; border-radius: 10px; border: 1px solid #555; background: #222; color: #fff; cursor: pointer; font-size: 32px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
+.pick:hover { transform: scale(1.1); }
+.pick.selected { outline: 3px solid #42b983; background: #333; }
+
+/* 气泡框选项 */
+.bubble-option .bubble-animation {
+  animation: bubble-float 2s ease-in-out infinite;
 }
-.prompt-line {
-  margin: 4px 0;
-  font-size: 18px;
-  line-height: 1.5;
+@keyframes bubble-float {
+  0%, 100% { 
+    transform: translateY(0px);
+  }
+  50% { 
+    transform: translateY(-5px);
+  }
 }
+
 .center-view { 
   display: flex; 
   justify-content: center; 
   align-items: center; 
-  height: 180px; 
-}
-.chosen-wrapper {
-  position: relative;
-  display: inline-block;
+  height: 160px;
+  margin: 15px 0;
 }
 .chosen { 
-  font-size: 96px; 
+  font-size: 120px;
+  transition: all 0.3s ease;
 }
-.thinking-bubble {
-  position: absolute;
-  top: -10px;
-  right: -20px;
-  font-size: 48px;
-  animation: thinking-float 2s ease-in-out infinite;
+
+/* Emoji 变化动画 */
+.emoji-change-enter-active,
+.emoji-change-leave-active {
+  transition: all 0.4s ease;
 }
-@keyframes thinking-float {
-  0%, 100% { 
-    transform: translateY(0px) scale(1);
-    opacity: 1;
-  }
-  50% { 
-    transform: translateY(-10px) scale(1.1);
-    opacity: 0.8;
-  }
-}
-.thinking-fade-enter-active,
-.thinking-fade-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-.thinking-fade-enter-from,
-.thinking-fade-leave-to {
+.emoji-change-enter-from {
   opacity: 0;
-  transform: scale(0.5);
+  transform: scale(0.5) rotate(180deg);
+}
+.emoji-change-leave-to {
+  opacity: 0;
+  transform: scale(0.5) rotate(-180deg);
+}
+
+/* 提示区域 - 输入框 */
+.prompt-section {
+  margin: 15px 0;
+  width: 100%;
+}
+
+/* 确保所有输入框都没有默认边框，除了下划线 */
+.prompt-section input {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  border: none !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background-image: none !important;
+}
+.input-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 8px 0;
+  font-size: 16px;
+  color: #ffd;
+}
+.label {
+  white-space: nowrap;
+}
+.animal-input {
+  width: 120px;
+  padding: 4px 8px;
+  border: none !important;
+  border-bottom: 2px solid #ffd !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  background: transparent;
+  color: #ffd;
+  font-size: 16px;
+  text-align: center;
+  outline: none !important;
+  transition: all 0.3s ease;
+  box-shadow: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+.animal-input:focus {
+  border-bottom-color: #42b983;
+  background: rgba(66, 185, 131, 0.1);
+}
+.animal-input::placeholder {
+  color: rgba(255, 255, 221, 0.5);
+}
+.animal-input.error {
+  border-bottom-color: #e74c3c;
+  background: rgba(231, 76, 60, 0.2);
+  animation: shake-input 0.5s ease;
+}
+@keyframes shake-input {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+/* 空白输入框（可拖入） */
+.blank-input {
+  position: relative;
+  min-width: 100px;
+  padding: 4px 8px;
+  border: none;
+  border-bottom: none;
+  background: transparent;
+  display: inline-block;
+  min-height: 26px;
+  transition: all 0.3s ease;
+}
+.blank-input:hover {
+  background: rgba(66, 185, 131, 0.1);
+}
+.blank-input:hover input {
+  background: linear-gradient(to bottom, transparent 0%, transparent calc(100% - 2px), #42b983 calc(100% - 2px), #42b983 100%) !important;
+}
+.blank-input input {
+  width: 100%;
+  border: none !important;
+  border-bottom: none !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+  background: linear-gradient(to bottom, transparent 0%, transparent calc(100% - 2px), #ffd calc(100% - 2px), #ffd 100%) !important;
+  color: #ffd;
+  font-size: 16px;
+  text-align: center;
+  outline: none !important;
+  padding: 0;
+  box-shadow: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  transition: background 0.3s ease;
+}
+.blank-input input::placeholder {
+  color: rgba(255, 255, 221, 0.5);
+}
+.filled-word {
+  color: #42b983;
+  font-weight: bold;
+  display: inline-block;
+  padding: 2px 6px;
+  background: rgba(66, 185, 131, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.filled-word:hover {
+  background: rgba(66, 185, 131, 0.5);
+  transform: scale(1.05);
+}
+
+/* 单词区域 */
+.words-section {
+  margin: 15px 0;
+  width: 100%;
+}
+.word-bank {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.word-chip {
+  padding: 6px 12px;
+  background: rgba(66, 185, 131, 0.8);
+  color: white;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  cursor: grab;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+.word-chip:hover {
+  background: rgba(66, 185, 131, 1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+.word-chip:active {
+  cursor: grabbing;
 }
 .controls { 
   display: flex; 
@@ -695,6 +1023,35 @@ export default {
 
 /* 移动端适配 */
 @media (max-width: 768px) {
+  .stage {
+    max-width: 100%;
+    padding: 15px;
+  }
+  
+  .pick {
+    width: 50px;
+    height: 50px;
+    font-size: 28px;
+  }
+  
+  .chosen {
+    font-size: 100px;
+  }
+  
+  .input-line {
+    font-size: 14px;
+  }
+  
+  .animal-input,
+  .blank-input input {
+    font-size: 14px;
+  }
+  
+  .word-chip {
+    font-size: 13px;
+    padding: 5px 10px;
+  }
+  
   .permission-content {
     padding: 20px;
     max-height: 90vh;
@@ -723,6 +1080,18 @@ export default {
   .retry-permission-btn,
   .close-modal-btn {
     width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .chosen {
+    font-size: 80px;
+  }
+  
+  .pick {
+    width: 45px;
+    height: 45px;
+    font-size: 24px;
   }
 }
 </style>

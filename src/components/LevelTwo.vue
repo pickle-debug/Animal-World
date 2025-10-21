@@ -35,7 +35,7 @@
     <div v-if="answered && !isCorrectChoice" class="try-again">Try again!</div>
 
     <div v-if="finished" class="finished">
-      四题完成！
+      六题完成！🎉
       <button class="restart-btn" @click="restart">再来一轮</button>
     </div>
   </div>
@@ -47,6 +47,11 @@ export default {
   data() {
     return {
       pool: [
+        {
+          answer: 'monkey',
+          emoji: '🐒',
+          clues: ['I can climb trees.', 'I like bananas.']
+        },
         {
           answer: 'elephant',
           emoji: '🐘',
@@ -63,9 +68,14 @@ export default {
           clues: ['I am black and white.', 'I look like a horse.']
         },
         {
-          answer: 'monkey',
-          emoji: '🐒',
-          clues: ['I can climb trees.', 'I like bananas.']
+          answer: 'tiger',
+          emoji: '🐯',
+          clues: ['I have orange and black stripes.', 'I am a big cat.']
+        },
+        {
+          answer: 'lion',
+          emoji: '🦁',
+          clues: ['I am the king of the jungle.', 'I have a big mane.']
         }
       ],
       currentRound: { answer: '', emoji: '', clues: [], options: [] },
@@ -93,9 +103,8 @@ export default {
       // pick one by order/roundIndex
       const currentAnswer = this.order[this.roundIndex]
       const item = this.pool.find(x => x.answer === currentAnswer)
-      const others = this.pool.filter(x => x.answer !== item.answer)
-      const distractors = others.sort(() => Math.random() - 0.5).slice(0, 3).map(x => x.answer)
-      const options = [...distractors, item.answer].sort(() => Math.random() - 0.5)
+      // 使用所有动物作为选项
+      const options = this.pool.map(x => x.answer).sort(() => Math.random() - 0.5)
       this.currentRound = { answer: item.answer, emoji: item.emoji, clues: [...item.clues], options }
       this.clueIndex = 1
       this.secondsLeft = 30
@@ -181,9 +190,34 @@ export default {
 .question-mark { font-size: 96px; margin-top: 8px; }
 .clues { min-height: 80px; }
 .clue-line { margin: 4px 0; }
-.options { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
-.opt-btn { padding: 8px 12px; border-radius: 8px; border: 1px solid #ddd; background: #fff; cursor: pointer; }
-.opt-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.options { 
+  display: flex; 
+  gap: 10px; 
+  flex-wrap: wrap; 
+  justify-content: center; 
+  max-width: 600px;
+  margin: 0 auto;
+}
+.opt-btn { 
+  padding: 10px 16px; 
+  border-radius: 8px; 
+  border: 1px solid #ddd; 
+  background: #fff; 
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+.opt-btn:hover:not(:disabled) {
+  background: #f0f9ff;
+  border-color: #42b983;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+.opt-btn:disabled { 
+  opacity: 0.6; 
+  cursor: not-allowed; 
+}
 .toolbar { display: flex; align-items: center; gap: 12px; }
 .hint-btn { padding: 6px 12px; border: none; background: #ffcc00; border-radius: 6px; cursor: pointer; }
 .timer { font-weight: bold; }

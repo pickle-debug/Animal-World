@@ -17,11 +17,17 @@
       <div class="center-view">
         <div class="chosen">{{ currentEmoji }}</div>
       </div>
-      <button class="mic" @click="toggleRecord">
-        <span v-if="!recording">🎤 开始</span>
-        <span v-else>⏹ 结束</span>
-      </button>
-      <div class="tips">点击麦克风后将提示“准备，开始！”。完成后自动给予积极反馈。</div>
+      <div class="controls">
+        <button class="example-btn" @click="playExample" :disabled="playing">
+          <span v-if="!playing">🔊 播放示例</span>
+          <span v-else>🔊 播放中...</span>
+        </button>
+        <button class="mic" @click="toggleRecord">
+          <span v-if="!recording">🎤 开始录音</span>
+          <span v-else>⏹ 结束录音</span>
+        </button>
+      </div>
+      <div class="tips">先点击"播放示例"听一遍，然后点击麦克风录制你的声音。</div>
     </div>
 
     <transition name="celebrate">
@@ -35,6 +41,9 @@
     <audio ref="cheerAudio">
       <source src="https://assets.mixkit.co/active_storage/sfx/1392/1392-preview.mp3" type="audio/mpeg" />
     </audio>
+    <audio ref="exampleAudio" @ended="onAudioEnded">
+      <source :src="currentAudioUrl" type="audio/mpeg" />
+    </audio>
   </div>
 </template>
 
@@ -44,27 +53,87 @@ export default {
   data() {
     return {
       animals: [
-        { key: 'lion', emoji: '🦁' },
-        { key: 'elephant', emoji: '🐘' },
-        { key: 'giraffe', emoji: '🦒' },
-        { key: 'zebra', emoji: '🦓' },
-        { key: 'monkey', emoji: '🐒' },
-        { key: 'kangaroo', emoji: '🦘' }
+        { 
+          key: 'lion', 
+          emoji: '🦁',
+          audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3'
+        },
+        { 
+          key: 'elephant', 
+          emoji: '🐘',
+          audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-04.mp3'
+        },
+        { 
+          key: 'giraffe', 
+          emoji: '🦒',
+          audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-03.mp3'
+        },
+        { 
+          key: 'zebra', 
+          emoji: '🦓',
+          audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-02.mp3'
+        },
+        { 
+          key: 'monkey', 
+          emoji: '🐒',
+          audioUrl: 'https://www.soundjay.com/misc/sounds/bell-ringing-01.mp3'
+        },
+        { 
+          key: 'kangaroo', 
+          emoji: '🦘',
+          audioUrl: 'https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3'
+        }
       ],
       selected: 'lion',
       recording: false,
       mediaRecorder: null,
-      showPraise: false
+      showPraise: false,
+      playing: false
     }
   },
   computed: {
     currentEmoji() {
       const f = this.animals.find(a => a.key === this.selected)
       return f ? f.emoji : '❓'
+    },
+    currentAudioUrl() {
+      const f = this.animals.find(a => a.key === this.selected)
+      return f ? f.audioUrl : ''
     }
   },
   methods: {
-    selectAnimal(k) { this.selected = k },
+    selectAnimal(k) { 
+      this.selected = k 
+      // 停止当前播放的音频
+      if (this.playing) {
+        const audio = this.$refs.exampleAudio
+        if (audio) {
+          audio.pause()
+          audio.currentTime = 0
+        }
+        this.playing = false
+      }
+    },
+    playExample() {
+      const audio = this.$refs.exampleAudio
+      if (!audio) return
+      
+      try {
+        this.playing = true
+        audio.load() // 重新加载音频源
+        audio.play().catch(err => {
+          console.error('播放失败:', err)
+          this.playing = false
+          alert('音频播放失败，请检查网络连接')
+        })
+      } catch (e) {
+        console.error('播放错误:', e)
+        this.playing = false
+      }
+    },
+    onAudioEnded() {
+      this.playing = false
+    },
     async toggleRecord() {
       if (!this.recording) {
         // start
@@ -114,7 +183,44 @@ export default {
 .prompt { text-align: center; margin: 10px 0; color: #ffd; }
 .center-view { display: flex; justify-content: center; align-items: center; height: 180px; }
 .chosen { font-size: 96px; }
-.mic { padding: 10px 16px; border: none; background: #ff4081; color: #fff; border-radius: 10px; cursor: pointer; }
+.controls { 
+  display: flex; 
+  gap: 12px; 
+  justify-content: center; 
+  align-items: center;
+  flex-wrap: wrap;
+}
+.example-btn, .mic { 
+  padding: 10px 16px; 
+  border: none; 
+  color: #fff; 
+  border-radius: 10px; 
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  min-width: 120px;
+}
+.example-btn {
+  background: #42b983;
+}
+.example-btn:hover:not(:disabled) {
+  background: #38a372;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(66, 185, 131, 0.3);
+}
+.example-btn:disabled {
+  background: #7dd4b4;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.mic { 
+  background: #ff4081;
+}
+.mic:hover {
+  background: #e91e63;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(255, 64, 129, 0.3);
+}
 .tips { margin-top: 8px; color: #ddd; font-size: 12px; }
 .praise { position: absolute; top: 16px; right: 16px; background: #ffc107; color: #333; padding: 8px 12px; border-radius: 10px; font-weight: bold; }
 .celebrate-enter-active, .celebrate-leave-active { transition: opacity .3s, transform .3s; }

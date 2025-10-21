@@ -6,7 +6,7 @@
       <button :class="{active: currentLevel === 3}" @click="currentLevel = 3">第三关</button>
     </div>
     <div class="stage">
-      <LevelOne v-if="currentLevel === 1" />
+      <LevelOne v-if="currentLevel === 1" @next-level="goToNextLevel" />
       <LevelTwo v-else-if="currentLevel === 2" />
       <LevelThree v-else />
     </div>
@@ -28,6 +28,13 @@ export default {
   data() {
     return {
       currentLevel: 1
+    }
+  },
+  methods: {
+    goToNextLevel() {
+      if (this.currentLevel < 3) {
+        this.currentLevel++
+      }
     }
   }
 }

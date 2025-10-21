@@ -1,6 +1,6 @@
 <template>
   <div class="level-one">
-    <h2>动物朋友对对碰 (Match & Meet!)</h2>
+    <h2>Match & Meet!</h2>
     <div class="top-grid">
       <div
         v-for="(animal, idx) in animals"

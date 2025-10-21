@@ -1,6 +1,6 @@
 <template>
   <div class="level-two">
-    <h2>神秘动物猜猜看 (Who Am I?)</h2>
+    <h2>Who Am I?</h2>
     <div class="question-mark">?</div>
     <div class="clues">
       <div v-for="(line, i) in visibleClues" :key="i" class="clue-line">{{ line }}</div>
@@ -178,7 +178,7 @@ export default {
 
 <style scoped>
 .level-two { display: flex; flex-direction: column; align-items: center; gap: 12px; }
-.question-mark { font-size: 72px; margin-top: 8px; }
+.question-mark { font-size: 96px; margin-top: 8px; }
 .clues { min-height: 80px; }
 .clue-line { margin: 4px 0; }
 .options { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }

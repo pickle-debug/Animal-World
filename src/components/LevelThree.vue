@@ -1,6 +1,6 @@
 <template>
   <div class="level-three">
-    <h2>我的最爱闪亮秀 (Show & Tell!)</h2>
+    <h2>Show & Tell!</h2>
     <div class="stage">
       <div class="animal-picker">
         <button

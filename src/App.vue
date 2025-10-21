@@ -7,7 +7,7 @@
     </div>
     <div class="stage">
       <LevelOne v-if="currentLevel === 1" @next-level="goToNextLevel" />
-      <LevelTwo v-else-if="currentLevel === 2" />
+      <LevelTwo v-else-if="currentLevel === 2" @next-level="goToNextLevel" />
       <LevelThree v-else />
     </div>
   </div>

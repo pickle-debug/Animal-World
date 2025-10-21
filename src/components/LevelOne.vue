@@ -54,15 +54,25 @@
       <button v-if="!submitted" class="submit-btn" @click="onSubmit">提交</button>
       <template v-else>
         <button class="retry-btn" @click="onRetry">重来</button>
-        <button v-if="allCorrect" class="next-btn" @click="onNext">下一关</button>
       </template>
     </div>
 
-    <transition name="celebrate">
-      <div v-if="submitted && allCorrect" class="celebration">
-        Great Job! 🎉
+    <!-- Great Job! 提示 -->
+    <transition name="correct-appear">
+      <div v-if="submitted && allCorrect && showConfetti" class="correct-overlay">
+        <div class="correct-text">Great Job!</div>
       </div>
     </transition>
+
+    <!-- 撒花动画 -->
+    <div v-if="showConfetti" class="confetti-container">
+      <div v-for="n in 30" :key="n" class="confetti" :style="confettiStyle()"></div>
+    </div>
+
+    <!-- 下一关按钮 -->
+    <div v-if="submitted && allCorrect" class="next-level-section">
+      <button class="next-level-btn" @click="onNext">下一关 →</button>
+    </div>
     
     <!-- 触摸拖动的视觉反馈元素 -->
     <div
@@ -102,7 +112,8 @@ export default {
       touchGhostY: 0,
       touchStartX: 0,
       touchStartY: 0,
-      isNearCardsArea: false
+      isNearCardsArea: false,
+      showConfetti: false
     }
   },
   computed: {
@@ -259,6 +270,13 @@ export default {
         // play cheer
         const a = this.$refs.cheerAudio
         if (a && a.play) a.play().catch(() => {})
+        
+        // 显示撒花动画
+        this.showConfetti = true
+        setTimeout(() => {
+          this.showConfetti = false
+        }, 2000)
+        
         // trigger bounce animation by toggling class on root
         this.$el.classList.remove('bounce-all')
         // next tick to reflow
@@ -283,6 +301,20 @@ export default {
     onNext() {
       // 通知父组件切换到下一关
       this.$emit('next-level')
+    },
+    confettiStyle() {
+      const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#a29bfe']
+      const randomColor = colors[Math.floor(Math.random() * colors.length)]
+      const randomLeft = Math.random() * 100
+      const randomDelay = Math.random() * 0.5
+      const randomDuration = 2 + Math.random() * 2
+      
+      return {
+        left: randomLeft + '%',
+        backgroundColor: randomColor,
+        animationDelay: randomDelay + 's',
+        animationDuration: randomDuration + 's'
+      }
     }
   }
 }
@@ -437,14 +469,82 @@ export default {
   box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
 }
 
-.celebration {
-  font-size: 24px;
-  color: #ff8c00;
-  animation: happy 0.8s ease both;
+/* Great Job! 提示 */
+.correct-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+  z-index: 1000;
 }
-@keyframes happy {
-  0% { transform: scale(0.8); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+.correct-text {
+  font-size: 72px;
+  font-weight: bold;
+  color: #42b983;
+  text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.2);
+  animation: correct-bounce 0.6s ease;
+}
+@keyframes correct-bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+.correct-appear-enter-active,
+.correct-appear-leave-active {
+  transition: opacity 0.5s ease;
+}
+.correct-appear-enter-from,
+.correct-appear-leave-to {
+  opacity: 0;
+}
+
+/* 撒花动画 */
+.confetti-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 999;
+}
+.confetti {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  top: -10px;
+  animation: confetti-fall 3s linear forwards;
+}
+@keyframes confetti-fall {
+  to {
+    transform: translateY(100vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* 下一关按钮 */
+.next-level-section {
+  margin-top: 20px;
+}
+.next-level-btn {
+  padding: 14px 32px;
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border-radius: 12px;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+.next-level-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
 }
 .bounce-all .animal-slot, .bounce-all .word-card {
   animation: bounce 0.8s ease;

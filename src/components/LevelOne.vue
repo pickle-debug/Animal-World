@@ -91,12 +91,11 @@ export default {
   data() {
     return {
       animals: [
-        { key: 'lion', nameZh: '狮子', emoji: '🦁' },
-        { key: 'elephant', nameZh: '大象', emoji: '🐘' },
-        { key: 'giraffe', nameZh: '长颈鹿', emoji: '🦒' },
-        { key: 'zebra', nameZh: '斑马', emoji: '🦓' },
-        { key: 'monkey', nameZh: '猴子', emoji: '🐒' },
-        { key: 'kangaroo', nameZh: '袋鼠', emoji: '🦘' }
+        { key: 'dog', nameZh: '狗', emoji: '🐶' },
+        { key: 'bee', nameZh: '蜜蜂', emoji: '🐝' },
+        { key: 'horse', nameZh: '马', emoji: '🐴' },
+        { key: 'cat', nameZh: '猫', emoji: '🐱' },
+        { key: 'elephant', nameZh: '大象', emoji: '🐘' }
       ],
       selectedWordByAnimal: {},
       draggingWord: null,
@@ -329,6 +328,10 @@ export default {
   gap: 12px;
   width: 100%;
   max-width: 720px;
+}
+/* 5个动物时使用2-2-1布局 */
+.top-grid:has(.animal-slot:nth-child(5)) {
+  grid-template-columns: repeat(3, 1fr);
 }
 .animal-slot {
   position: relative;

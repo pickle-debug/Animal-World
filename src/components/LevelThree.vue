@@ -1,6 +1,8 @@
 <template>
   <div class="level-three">
     <h2>Show & Tell!</h2>
+    <!-- 右上角查看上传记录按钮 -->
+    <button class="view-uploads-btn" @click="showUploadsModal = true">📋 查看上传记录</button>
     <div class="stage">
       <div class="animal-picker">
         <button
@@ -127,6 +129,15 @@
           <span v-if="!isPlayingRecorded">▶️ 播放我的录音</span>
           <span v-else>⏸ 暂停</span>
         </button>
+        <button 
+          v-if="recordedAudioUrl" 
+          class="upload-btn" 
+          @click="showUploadModal = true"
+          :disabled="uploading"
+        >
+          <span v-if="!uploading">☁️ 上传录音</span>
+          <span v-else>📤 上传中...</span>
+        </button>
       </div>
       <div class="tips">
         💡 先点击"播放示例"听一遍<br>
@@ -149,6 +160,67 @@
       <source :src="currentAudioUrl" type="audio/mpeg" />
     </audio>
     <audio ref="recordedAudio" @ended="onRecordedAudioEnded"></audio>
+
+    <!-- 上传录音弹窗 -->
+    <div v-if="showUploadModal" class="upload-modal" @click="closeUploadModal">
+      <div class="upload-content" @click.stop>
+        <h3>☁️ 上传录音</h3>
+        <div class="upload-form">
+          <div class="form-group">
+            <label>请输入您的姓名：</label>
+            <input 
+              v-model="uploaderName" 
+              type="text" 
+              class="name-input"
+              placeholder="例如：张三"
+              @keyup.enter="confirmUpload"
+            />
+          </div>
+          <div class="upload-info">
+            <p>录音文件名：{{ uploadFileName }}</p>
+          </div>
+          <div class="modal-buttons">
+            <button class="confirm-upload-btn" @click="confirmUpload" :disabled="!uploaderName.trim() || uploading">
+              <span v-if="!uploading">确定上传</span>
+              <span v-else>上传中...</span>
+            </button>
+            <button class="cancel-upload-btn" @click="closeUploadModal" :disabled="uploading">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 查看上传记录弹窗 -->
+    <div v-if="showUploadsModal" class="uploads-modal" @click="closeUploadsModal">
+      <div class="uploads-content" @click.stop>
+        <h3>📋 上传记录</h3>
+        <div class="uploads-list-container">
+          <div v-if="loadingUploads" class="loading">加载中...</div>
+          <div v-else-if="uploadedAudios.length === 0" class="empty-list">暂无上传记录</div>
+          <div v-else class="uploads-list">
+            <div 
+              v-for="(audio, index) in uploadedAudios" 
+              :key="index" 
+              class="upload-item"
+            >
+              <div class="upload-item-info">
+                <span class="upload-name">{{ audio.name }}</span>
+                <span class="upload-time">{{ audio.time }}</span>
+              </div>
+              <audio :src="audio.url" controls class="upload-audio"></audio>
+            </div>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="download-all-btn" @click="downloadAllAsZip" :disabled="uploadedAudios.length === 0 || downloading">
+            <span v-if="!downloading">📦 下载所有音频 (ZIP)</span>
+            <span v-else>📦 打包中...</span>
+          </button>
+          <button class="refresh-btn" @click="loadUploadedAudios" :disabled="loadingUploads">🔄 刷新</button>
+          <button class="close-modal-btn" @click="closeUploadsModal">关闭</button>
+        </div>
+      </div>
+    </div>
 
     <!-- 权限指导弹窗 -->
     <div v-if="showPermissionGuide" class="permission-modal" @click="closePermissionGuide">
@@ -188,6 +260,9 @@
 </template>
 
 <script>
+import { S3Client, PutObjectCommand, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3'
+import JSZip from 'jszip'
+
 export default {
   name: 'LevelThree',
   data() {
@@ -290,6 +365,24 @@ export default {
         'rabbit': '🐰',
         'deer': '🦌',
         'panda': '🐼'
+      },
+      // 上传相关
+      showUploadModal: false,
+      uploaderName: '',
+      uploading: false,
+      showUploadsModal: false,
+      uploadedAudios: [],
+      loadingUploads: false,
+      downloading: false,
+      // R2配置 - 请替换为您的实际配置
+      r2Config: {
+        endpoint: 'https://cbbca4b929b2a4a0d3618894ed8f15be.r2.cloudflarestorage.com', // 您的 R2 Endpoint URL，格式: 'https://xxxxxxxxxxxx.r2.cloudflarestorage.com'
+        // 获取方式：Cloudflare 控制台 → R2 → 存储桶设置 → S3 API → 查看 Endpoint
+        accessKeyId: '7b01b369d533d8d412dafd2556b5b865', // 您的 R2 Access Key ID（创建 token 时显示的，格式类似长字符串）
+        // 获取方式：创建 token 时与 Secret Access Key 一起显示的 Access Key ID
+        secretAccessKey: 'c1f9a8260abb6d8e8f9277a7ca88f1be651b703a2212ba0ad0902899eed06af6', // 您的 R2 Secret Access Key
+        bucketName: 'funzoo', // 您的存储桶名称
+        region: 'auto' // R2 使用 'auto'
       }
     }
   },
@@ -326,6 +419,13 @@ export default {
         return '💭'
       }
       return this.currentEmoji
+    },
+    uploadFileName() {
+      if (!this.recordedAudioBlob || !this.uploaderName.trim()) return 'recording.webm'
+      const timestamp = Date.now()
+      const sanitizedName = this.uploaderName.trim().replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_')
+      // 文件名格式：姓名_时间戳.webm，实际会保存在 records/ 文件夹中
+      return `${sanitizedName}_${timestamp}.webm`
     }
   },
   methods: {
@@ -607,6 +707,217 @@ export default {
       return {
         transform: `rotate(${angle}deg) translateY(-40px)`
       }
+    },
+    closeUploadModal() {
+      if (!this.uploading) {
+        this.showUploadModal = false
+        this.uploaderName = ''
+      }
+    },
+    async confirmUpload() {
+      if (!this.uploaderName.trim() || !this.recordedAudioBlob || this.uploading) return
+      
+      // 检查R2配置
+      if (!this.r2Config.endpoint || !this.r2Config.accessKeyId || !this.r2Config.secretAccessKey || !this.r2Config.bucketName) {
+        alert('请先在代码中配置 Cloudflare R2 的访问信息！\n\n请在 LevelThree.vue 的 data() 中设置 r2Config 对象的值。')
+        return
+      }
+      
+      this.uploading = true
+      try {
+        const fileName = this.uploadFileName
+        // 将文件保存到 records 文件夹
+        const filePath = `records/${fileName}`
+        // 配置 S3Client - R2 需要 forcePathStyle
+        const s3Client = new S3Client({
+          endpoint: this.r2Config.endpoint,
+          region: this.r2Config.region,
+          credentials: {
+            accessKeyId: this.r2Config.accessKeyId,
+            secretAccessKey: this.r2Config.secretAccessKey
+          },
+          forcePathStyle: true // R2 需要这个配置
+        })
+        
+        // 确保 Body 是 Blob 格式
+        let body = this.recordedAudioBlob
+        if (!(body instanceof Blob) && !(body instanceof ArrayBuffer)) {
+          // 如果已经是 Blob，直接使用；否则转换为 Blob
+          body = this.recordedAudioBlob
+        }
+        
+        const uploadCommand = new PutObjectCommand({
+          Bucket: this.r2Config.bucketName,
+          Key: filePath, // 使用 records 文件夹路径
+          Body: body,
+          ContentType: 'audio/webm'
+        })
+        
+        await s3Client.send(uploadCommand)
+        
+        alert('上传成功！')
+        this.closeUploadModal()
+        
+        // 刷新上传列表
+        if (this.showUploadsModal) {
+          this.loadUploadedAudios()
+        }
+      } catch (error) {
+        console.error('上传失败:', error)
+        alert('上传失败：' + (error.message || '未知错误'))
+      } finally {
+        this.uploading = false
+      }
+    },
+    async loadUploadedAudios() {
+      if (!this.r2Config.endpoint || !this.r2Config.accessKeyId || !this.r2Config.secretAccessKey || !this.r2Config.bucketName) {
+        alert('请先在代码中配置 Cloudflare R2 的访问信息！')
+        return
+      }
+      
+      this.loadingUploads = true
+      try {
+        // 配置 S3Client - R2 需要 forcePathStyle
+        const s3Client = new S3Client({
+          endpoint: this.r2Config.endpoint,
+          region: this.r2Config.region,
+          credentials: {
+            accessKeyId: this.r2Config.accessKeyId,
+            secretAccessKey: this.r2Config.secretAccessKey
+          },
+          forcePathStyle: true // R2 需要这个配置
+        })
+        
+        const listCommand = new ListObjectsV2Command({
+          Bucket: this.r2Config.bucketName,
+          Prefix: 'records/' // 只列出 records 文件夹中的文件
+        })
+        
+        const response = await s3Client.send(listCommand)
+        
+        this.uploadedAudios = (response.Contents || [])
+          .filter(item => item.Key && item.Key.startsWith('records/') && item.Key.endsWith('.webm'))
+          .map(item => {
+            // 从文件路径中提取文件名（去掉 records/ 前缀）
+            const fileName = item.Key.replace(/^records\//, '')
+            // 从文件名提取姓名和时间戳
+            const match = fileName.match(/^(.+?)_(\d+)\.webm$/)
+            const name = match ? match[1] : fileName
+            const timestamp = match ? parseInt(match[2]) : (item.LastModified ? new Date(item.LastModified).getTime() : Date.now())
+            const time = new Date(timestamp).toLocaleString('zh-CN')
+            const customDomain = 'https://funzoor2.heself.com'
+            const url = `${customDomain}/${item.Key}`
+            return {
+              name,
+              time,
+              url,
+              key: item.Key,
+              size: item.Size
+            }
+          })
+          .sort((a, b) => b.time.localeCompare(a.time))
+      } catch (error) {
+        console.error('加载上传记录失败:', error)
+        alert('加载失败：' + (error.message || '未知错误'))
+      } finally {
+        this.loadingUploads = false
+      }
+    },
+    async downloadAllAsZip() {
+      if (this.uploadedAudios.length === 0 || this.downloading) return
+      
+      this.downloading = true
+      try {
+        const zip = new JSZip()
+        // 配置 S3Client - R2 需要 forcePathStyle
+        const s3Client = new S3Client({
+          endpoint: this.r2Config.endpoint,
+          region: this.r2Config.region,
+          credentials: {
+            accessKeyId: this.r2Config.accessKeyId,
+            secretAccessKey: this.r2Config.secretAccessKey
+          },
+          forcePathStyle: true // R2 需要这个配置
+        })
+        
+        // 下载所有音频文件并添加到zip
+        for (const audio of this.uploadedAudios) {
+          try {
+            const getCommand = new GetObjectCommand({
+              Bucket: this.r2Config.bucketName,
+              Key: audio.key
+            })
+            
+            const response = await s3Client.send(getCommand)
+            
+            // 修复浏览器环境中的流读取问题
+            // 在浏览器中，AWS SDK v3 返回的 Body 可能是 ReadableStream 或其他格式
+            let arrayBuffer
+            try {
+              // 方法1: 使用 Response API (浏览器标准方式，最可靠)
+              if (response.Body) {
+                // 将 Body 包装为 Response 对象，这是浏览器环境中最兼容的方式
+                const responseObj = response.Body instanceof Response 
+                  ? response.Body 
+                  : new Response(response.Body)
+                
+                arrayBuffer = await responseObj.arrayBuffer()
+              } else {
+                throw new Error('响应体为空')
+              }
+            } catch (streamError) {
+              console.error('读取流失败，尝试备用方法:', streamError)
+              // 备用方法1: 尝试直接使用 transformToByteArray (如果可用)
+              if (response.Body && typeof response.Body.transformToByteArray === 'function') {
+                try {
+                  arrayBuffer = await response.Body.transformToByteArray()
+                } catch (e) {
+                  console.error('transformToByteArray 失败:', e)
+                  throw streamError
+                }
+              } else {
+                throw streamError
+              }
+            }
+            
+            // 使用文件名而不是完整路径作为zip中的文件名
+            const fileName = audio.key.replace(/^records\//, '')
+            zip.file(fileName, arrayBuffer)
+          } catch (error) {
+            console.error(`下载 ${audio.key} 失败:`, error)
+          }
+        }
+        
+        // 生成zip文件
+        const blob = await zip.generateAsync({ type: 'blob' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `录音合集_${new Date().toISOString().slice(0, 10)}.zip`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        
+        alert('打包下载完成！')
+      } catch (error) {
+        console.error('打包下载失败:', error)
+        alert('打包下载失败：' + (error.message || '未知错误'))
+      } finally {
+        this.downloading = false
+      }
+    },
+    closeUploadsModal() {
+      if (!this.loadingUploads && !this.downloading) {
+        this.showUploadsModal = false
+      }
+    }
+  },
+  watch: {
+    showUploadsModal(newVal) {
+      if (newVal) {
+        this.loadUploadedAudios()
+      }
     }
   },
   beforeUnmount() {
@@ -631,7 +942,13 @@ export default {
 </script>
 
 <style scoped>
-.level-three { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.level-three { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  gap: 12px; 
+  position: relative;
+}
 .stage { position: relative; width: 100%; max-width: 900px; background: linear-gradient(180deg,#111 0%,#333 40%,#222 100%); color: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
 .animal-picker { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px; }
 .pick { width: 60px; height: 60px; border-radius: 10px; border: 1px solid #555; background: #222; color: #fff; cursor: pointer; font-size: 32px; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; }
@@ -1016,9 +1333,291 @@ export default {
   color: #666;
 }
 
-.close-modal-btn:hover {
+  .close-modal-btn:hover {
+    background: #d0d0d0;
+    transform: translateY(-2px);
+  }
+
+/* 查看上传记录按钮 */
+.view-uploads-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 8px 16px;
+  border: none;
+  background: #42b983;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  z-index: 100;
+}
+.view-uploads-btn:hover {
+  background: #38a372;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(66, 185, 131, 0.3);
+}
+
+/* 上传按钮 */
+.upload-btn {
+  padding: 10px 16px;
+  border: none;
+  background: #17a2b8;
+  color: #fff;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  min-width: 120px;
+}
+.upload-btn:hover:not(:disabled) {
+  background: #138496;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(23, 162, 184, 0.3);
+}
+.upload-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 上传弹窗 */
+.upload-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.upload-content {
+  background: white;
+  border-radius: 16px;
+  padding: 30px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.upload-content h3 {
+  margin: 0 0 20px 0;
+  color: #2c3e50;
+  font-size: 24px;
+  text-align: center;
+}
+
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  color: #2c3e50;
+  font-weight: 500;
+  font-size: 16px;
+}
+
+.name-input {
+  padding: 12px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  font-size: 16px;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.name-input:focus {
+  border-color: #42b983;
+  box-shadow: 0 0 0 3px rgba(66, 185, 131, 0.1);
+}
+
+.upload-info {
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #666;
+}
+
+.upload-info p {
+  margin: 0;
+}
+
+.confirm-upload-btn,
+.cancel-upload-btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.confirm-upload-btn {
+  background: #42b983;
+  color: white;
+}
+
+.confirm-upload-btn:hover:not(:disabled) {
+  background: #38a372;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(66, 185, 131, 0.3);
+}
+
+.confirm-upload-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancel-upload-btn {
+  background: #e0e0e0;
+  color: #666;
+}
+
+.cancel-upload-btn:hover:not(:disabled) {
   background: #d0d0d0;
   transform: translateY(-2px);
+}
+
+/* 查看上传记录弹窗 */
+.uploads-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+  padding: 20px;
+}
+
+.uploads-content {
+  background: white;
+  border-radius: 16px;
+  padding: 30px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+.uploads-content h3 {
+  margin: 0 0 20px 0;
+  color: #2c3e50;
+  font-size: 24px;
+  text-align: center;
+}
+
+.uploads-list-container {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 20px;
+  min-height: 200px;
+  max-height: 400px;
+}
+
+.loading,
+.empty-list {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+  font-size: 16px;
+}
+
+.uploads-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.upload-item {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  border: 1px solid #e0e0e0;
+}
+
+.upload-item-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.upload-name {
+  font-weight: bold;
+  color: #2c3e50;
+  font-size: 16px;
+}
+
+.upload-time {
+  color: #999;
+  font-size: 14px;
+}
+
+.upload-audio {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.download-all-btn,
+.refresh-btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.download-all-btn {
+  background: #ff9800;
+  color: white;
+}
+
+.download-all-btn:hover:not(:disabled) {
+  background: #f57c00;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(255, 152, 0, 0.3);
+}
+
+.download-all-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.refresh-btn {
+  background: #2196f3;
+  color: white;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: #1976d2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* 移动端适配 */

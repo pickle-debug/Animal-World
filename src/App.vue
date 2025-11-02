@@ -2,12 +2,14 @@
   <div id="game-app">
     <div class="tabs">
       <button :class="{active: currentLevel === 1}" @click="currentLevel = 1">第一关</button>
-      <button :class="{active: currentLevel === 2}" @click="currentLevel = 2">第二关</button>
+      <!-- 第二关暂时隐藏 -->
+      <!-- <button :class="{active: currentLevel === 2}" @click="currentLevel = 2">第二关</button> -->
       <button :class="{active: currentLevel === 3}" @click="currentLevel = 3">第三关</button>
     </div>
     <div class="stage">
       <LevelOne v-if="currentLevel === 1" @next-level="goToNextLevel" />
-      <LevelTwo v-else-if="currentLevel === 2" @next-level="goToNextLevel" />
+      <!-- 第二关暂时隐藏 -->
+      <!-- <LevelTwo v-else-if="currentLevel === 2" @next-level="goToNextLevel" /> -->
       <LevelThree v-else />
     </div>
   </div>
@@ -16,24 +18,28 @@
 
 <script>
 import LevelOne from './components/LevelOne.vue'
-import LevelTwo from './components/LevelTwo.vue'
+// 第二关暂时隐藏
+// import LevelTwo from './components/LevelTwo.vue'
 import LevelThree from './components/LevelThree.vue'
 export default {
   name: 'App',
   components: {
     LevelOne,
-    LevelTwo,
+    // LevelTwo, // 第二关暂时隐藏
     LevelThree
   },
   data() {
     return {
-      currentLevel: 1
+      currentLevel: 3  // 默认指向第三关
     }
   },
   methods: {
     goToNextLevel() {
       if (this.currentLevel < 3) {
         this.currentLevel++
+      } else {
+        // 如果已经在第三关，跳转到第三关（保持不变）
+        this.currentLevel = 3
       }
     }
   }

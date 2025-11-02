@@ -262,6 +262,7 @@
 <script>
 import { S3Client, PutObjectCommand, ListObjectsV2Command, GetObjectCommand } from '@aws-sdk/client-s3'
 import JSZip from 'jszip'
+import * as lamejs from '@breezystack/lamejs'
 
 export default {
   name: 'LevelThree',
@@ -421,10 +422,12 @@ export default {
       return this.currentEmoji
     },
     uploadFileName() {
+      // 这个方法现在在 confirmUpload 中动态生成文件名
+      // 保留这个方法用于显示预览文件名
       if (!this.recordedAudioBlob || !this.uploaderName.trim()) return 'recording.webm'
       const timestamp = Date.now()
       const sanitizedName = this.uploaderName.trim().replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_')
-      // 文件名格式：姓名_时间戳.webm，实际会保存在 records/ 文件夹中
+      // 默认显示为 webm（实际可能会转换为 mp3）
       return `${sanitizedName}_${timestamp}.webm`
     }
   },
@@ -714,8 +717,111 @@ export default {
         this.uploaderName = ''
       }
     },
+    // 将 WebM 音频转换为 MP3
+    async convertWebmToMp3(webmBlob) {
+      try {
+        // 创建 AudioContext
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+        const arrayBuffer = await webmBlob.arrayBuffer()
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+        
+        // 获取 PCM 数据
+        const sampleRate = audioBuffer.sampleRate
+        const leftChannel = audioBuffer.getChannelData(0)
+        const rightChannel = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : leftChannel
+        
+        // 转换为 16-bit PCM
+        const samples = leftChannel.length
+        const pcmLeft = new Int16Array(samples)
+        const pcmRight = new Int16Array(samples)
+        
+        for (let i = 0; i < samples; i++) {
+          pcmLeft[i] = Math.max(-32768, Math.min(32767, leftChannel[i] * 32768))
+          if (audioBuffer.numberOfChannels > 1) {
+            pcmRight[i] = Math.max(-32768, Math.min(32767, rightChannel[i] * 32768))
+          } else {
+            pcmRight[i] = pcmLeft[i]
+          }
+        }
+        
+        // 使用 lamejs 编码为 MP3
+        const mp3encoder = new lamejs.Mp3Encoder(1, sampleRate, 128) // 单声道，128kbps
+        const sampleBlockSize = 1152
+        const mp3Data = []
+        
+        for (let i = 0; i < samples; i += sampleBlockSize) {
+          const leftChunk = pcmLeft.subarray(i, i + sampleBlockSize)
+          const rightChunk = pcmRight.subarray(i, i + sampleBlockSize)
+          const mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk)
+          if (mp3buf.length > 0) {
+            mp3Data.push(mp3buf)
+          }
+        }
+        
+        // 完成编码
+        const mp3buf = mp3encoder.flush()
+        if (mp3buf.length > 0) {
+          mp3Data.push(mp3buf)
+        }
+        
+        // 合并所有 MP3 数据
+        const mp3Blob = new Blob(mp3Data, { type: 'audio/mp3' })
+        return mp3Blob
+      } catch (error) {
+        console.error('转换 MP3 失败:', error)
+        throw error
+      }
+    },
+    
+    // 使用原生 HTTP (fetch) 上传到 R2（未使用，保留以备将来实现纯 fetch 上传）
+    // eslint-disable-next-line no-unused-vars
+    async uploadToR2WithFetch(fileBlob, filePath) {
+      const endpoint = this.r2Config.endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '')
+      const url = `https://${endpoint}/${this.r2Config.bucketName}/${filePath}`
+      
+      // 使用 fetch 直接上传（需要完整的 AWS Signature V4 实现）
+      // 当前使用 AWS SDK，此方法暂未使用
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'audio/mp3',
+          'Authorization': this.getAuthHeader('PUT', `/${this.r2Config.bucketName}/${filePath}`)
+        },
+        body: fileBlob
+      })
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`上传失败: ${response.status} ${response.statusText} - ${errorText}`)
+      }
+      
+      return response
+    },
+    
+    // 生成 AWS Signature V4 认证头（简化版，未使用，保留以备将来实现纯 fetch 上传）
+    // eslint-disable-next-line no-unused-vars
+    getAuthHeader(method, path) {
+      const accessKeyId = this.r2Config.accessKeyId
+      const secretAccessKey = this.r2Config.secretAccessKey
+      
+      // 注意：这是一个简化版本，实际 AWS Signature V4 更复杂
+      // 当前使用 AWS SDK 进行上传，此方法暂未使用
+      // 如果要实现纯 fetch 上传，需要完整的签名算法实现
+      
+      // 使用 btoa 进行 base64 编码（简化方式）
+      const credentials = btoa(`${accessKeyId}:${secretAccessKey}`).replace(/=+$/, '')
+      
+      return `AWS ${credentials}`
+    },
+    
     async confirmUpload() {
       if (!this.uploaderName.trim() || !this.recordedAudioBlob || this.uploading) return
+      
+      // 检查录音文件大小
+      if (this.recordedAudioBlob.size < 1000) {
+        alert('录音文件太小，可能录音失败。请重新录制。')
+        return
+      }
       
       // 检查R2配置
       if (!this.r2Config.endpoint || !this.r2Config.accessKeyId || !this.r2Config.secretAccessKey || !this.r2Config.bucketName) {
@@ -725,10 +831,39 @@ export default {
       
       this.uploading = true
       try {
-        const fileName = this.uploadFileName
-        // 将文件保存到 records 文件夹
+        let fileBlob = null
+        let contentType = 'audio/webm'
+        let fileName = ''
+        
+        // 步骤1: 尝试转换为 MP3
+        try {
+          console.log('开始转换音频为 MP3...', '原始文件大小:', this.recordedAudioBlob.size)
+          fileBlob = await this.convertWebmToMp3(this.recordedAudioBlob)
+          console.log('MP3 转换完成，文件大小:', fileBlob.size)
+          contentType = 'audio/mp3'
+          
+          // 更新文件名
+          const timestamp = Date.now()
+          const sanitizedName = this.uploaderName.trim().replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_')
+          fileName = `${sanitizedName}_${timestamp}.mp3`
+        } catch (conversionError) {
+          console.warn('MP3 转换失败，使用原始 WebM 格式:', conversionError)
+          // 降级：直接使用 WebM
+          fileBlob = this.recordedAudioBlob
+          contentType = 'audio/webm'
+          
+          // 更新文件名
+          const timestamp = Date.now()
+          const sanitizedName = this.uploaderName.trim().replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]/g, '_')
+          fileName = `${sanitizedName}_${timestamp}.webm`
+        }
+        
+        // 步骤2: 上传文件
         const filePath = `records/${fileName}`
-        // 配置 S3Client - R2 需要 forcePathStyle
+        
+        console.log('开始上传到 R2...', '文件类型:', contentType, '文件大小:', fileBlob.size)
+        
+        // 使用 AWS SDK 上传
         const s3Client = new S3Client({
           endpoint: this.r2Config.endpoint,
           region: this.r2Config.region,
@@ -736,21 +871,18 @@ export default {
             accessKeyId: this.r2Config.accessKeyId,
             secretAccessKey: this.r2Config.secretAccessKey
           },
-          forcePathStyle: true // R2 需要这个配置
+          forcePathStyle: true
         })
         
-        // 确保 Body 是 Blob 格式
-        let body = this.recordedAudioBlob
-        if (!(body instanceof Blob) && !(body instanceof ArrayBuffer)) {
-          // 如果已经是 Blob，直接使用；否则转换为 Blob
-          body = this.recordedAudioBlob
-        }
+        // 将 Blob 转换为 Uint8Array
+        const arrayBuffer = await fileBlob.arrayBuffer()
+        const uint8Array = new Uint8Array(arrayBuffer)
         
         const uploadCommand = new PutObjectCommand({
           Bucket: this.r2Config.bucketName,
-          Key: filePath, // 使用 records 文件夹路径
-          Body: body,
-          ContentType: 'audio/webm'
+          Key: filePath,
+          Body: uint8Array,
+          ContentType: contentType
         })
         
         await s3Client.send(uploadCommand)
@@ -796,12 +928,12 @@ export default {
         const response = await s3Client.send(listCommand)
         
         this.uploadedAudios = (response.Contents || [])
-          .filter(item => item.Key && item.Key.startsWith('records/') && item.Key.endsWith('.webm'))
+          .filter(item => item.Key && item.Key.startsWith('records/') && (item.Key.endsWith('.webm') || item.Key.endsWith('.mp3')))
           .map(item => {
             // 从文件路径中提取文件名（去掉 records/ 前缀）
             const fileName = item.Key.replace(/^records\//, '')
-            // 从文件名提取姓名和时间戳
-            const match = fileName.match(/^(.+?)_(\d+)\.webm$/)
+            // 从文件名提取姓名和时间戳（支持 .webm 和 .mp3）
+            const match = fileName.match(/^(.+?)_(\d+)\.(webm|mp3)$/)
             const name = match ? match[1] : fileName
             const timestamp = match ? parseInt(match[2]) : (item.LastModified ? new Date(item.LastModified).getTime() : Date.now())
             const time = new Date(timestamp).toLocaleString('zh-CN')

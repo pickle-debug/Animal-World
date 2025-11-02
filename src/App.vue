@@ -4,7 +4,7 @@
       <button :class="{active: currentLevel === 1}" @click="currentLevel = 1">第一关</button>
       <!-- 第二关暂时隐藏 -->
       <!-- <button :class="{active: currentLevel === 2}" @click="currentLevel = 2">第二关</button> -->
-      <button :class="{active: currentLevel === 3}" @click="currentLevel = 3">第三关</button>
+      <button :class="{active: currentLevel === 3}" @click="currentLevel = 3">第二关</button>
     </div>
     <div class="stage">
       <LevelOne v-if="currentLevel === 1" @next-level="goToNextLevel" />
